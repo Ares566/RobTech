@@ -1,4 +1,4 @@
 # Robtech
 Arduino Library for robotic devices.
-Including 2 DC Motor with encoders controlling, sonic sensor library, IR remote controller.
-Line following and LCD-controller as optional.
+Библиотека для работы с материнской платой набора РОБТЕХ
+http://robtech.ru/materinskaya_plata_Yadro_robota.html
