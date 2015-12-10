@@ -138,8 +138,8 @@ Robtech::Robtech(){
 }
 
 //инициализация робота
-void Robtech::initAR(int mode,uint16_t ar_width){
-	_ar_width = ar_width;
+void Robtech::initAR(int mode){
+	_ar_width = 130;
 	//инициализация дисплея
 	if (mode && AR_M_WITH_LCD){
 		LCDinit();
@@ -200,7 +200,7 @@ void Robtech::moveForward(uint8_t speed, uint16_t distance){
 
 	//обработка distance
 	if (distance){
-		waitingDistance4LM(distance);
+		waitingDistance4RM(distance);
 		stopMoving();
 	}
 }
@@ -217,7 +217,7 @@ void Robtech::moveBackward(uint8_t speed, uint16_t distance){
 
 	//обработка distance
 	if (distance){
-		waitingDistance4LM(distance);
+		waitingDistance4RM(distance);
 		stopMoving();
 	}
 }
@@ -232,13 +232,13 @@ void Robtech::turnLeft(int degree){
 		digitalWrite(DIRR,LOW);//...или назад
 	
 	//скорость разворота
-	uint8_t speed = 220;
+	uint8_t speed = 200;
 	//длина дуги
-	uint16_t ArcLen = round(PI * _ar_width * degree / 1800);
+	uint16_t ArcLen = abs(round(PI * _ar_width * degree / 1800));
 	
 	//если развернуться нужно на мешьше оборота колеса, делаем скорость ниже
 	if (ArcLen < 20){
-		speed = 200;
+		speed = 180;
 	}
 
 	analogWrite(ENL,0);//левое колесо на месте
@@ -258,13 +258,13 @@ void Robtech::turnRight(int degree){
 		digitalWrite(DIRL,LOW);//...или назад
 
 	//скорость разворота
-	uint8_t speed = 220;
+	uint8_t speed = 200;
 	//длина дуги
-	uint16_t ArcLen = round(PI * _ar_width * degree / 1800);
+	uint16_t ArcLen = abs(round(PI * _ar_width * degree / 1800));
 
 	//если развернуться нужно на мешьше оборота колеса, делаем скорость ниже
 	if (ArcLen < 20){
-		speed = 200;
+		speed = 180;
 	}
 
 	analogWrite(ENL,speed);
@@ -301,21 +301,43 @@ void Robtech::waitingDistance4RM(uint16_t distance){
 *  подсчитываем пройденное расстояние
 */
 //функция вызываемая прерыванием для подсчета оборотов левого колеса
+
+
 void  encoderFuncM_L() {
-  if (digitalRead(2) == HIGH) {
+	static unsigned long last_interrupt_time_l = 0;
+ 	unsigned long interrupt_time_l = millis();
+
+  if (digitalRead(2) == HIGH && interrupt_time_l - last_interrupt_time_l > 25) {
     lw_enc_counter++;
+    last_interrupt_time_l = interrupt_time_l;
   } 
 }
 //функция вызываемая прерыванием для подсчета оборотов левого колеса
+
 void encoderFuncM_R() {
-  if (digitalRead(3) == HIGH) {
-    rw_enc_counter++;
-  } 
+	static unsigned long last_interrupt_time_r = 0;
+ 	unsigned long interrupt_time_r = millis();
+ 	
 
+	if (digitalRead(3) == HIGH && interrupt_time_r - last_interrupt_time_r > 25) {
+		rw_enc_counter++;
+		last_interrupt_time_r = interrupt_time_r;
+	} 
+	
 }
-
+//сколько сантиметров проехал робот
+uint16_t Robtech::getCoveredDistance(){
+	uint16_t _cd = (int)((getLeftWheelDistance() + getRightWheelDistance()) / 2);
+	return _cd;
+}
+//сброс пройденного расстояния
+void Robtech::resetCoveredDistance(){
+	resetLeftWheelDistance();
+	resetRightWheelDistance();
+}
 //сколько сантиметров проехало левое колесо
 uint16_t Robtech::getLeftWheelDistance(){
+	
 	//один оборот двигателя равен 20 импульсам диаметр колеса в мм
 	return round( lw_enc_counter * PI*AR_WHEEL_D / 200 );
 }
@@ -352,6 +374,17 @@ void Robtech::digitalWriteP(uint8_t pin, uint8_t val){
 void Robtech::toggleP(uint8_t pin){
 	return PCF_20.toggle(pin);
 }
+void Robtech::pinModeP(uint8_t pin, uint8_t mode){
+	if (pin<1)
+	{
+		return;
+	}
+	if (pin>8)
+	{
+		/* стандартный digitalRead */
+		pinMode(pin,mode);
+	}
+}
 uint8_t Robtech::digitalReadP(uint8_t pin){
 	if (pin<1)
 	{
@@ -364,7 +397,6 @@ uint8_t Robtech::digitalReadP(uint8_t pin){
 	}
 	return PCF_20.read(pin-1);
 }
-
 
 
 //wire interface to OLED

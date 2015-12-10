@@ -1,6 +1,7 @@
 /*
   Robtech.h - Library for Arduino robotic devices.
   Created by Renat Abaidulin, July 22, 2015.
+  Ver. 0.7
 */
 
 #ifndef Robtech_h
@@ -13,13 +14,13 @@
 #endif
 
 #define AR_M_WITH_ENC 1//режим работы с энкодерами 
-#define AR_M_WITH_NRF 2//режим работы с nrf24l01 
-#define AR_M_WITH_LCD 4//режим работы с nrf24l01 
+//#define AR_M_WITH_NRF 2//режим работы с nrf24l01 
+#define AR_M_WITH_LCD 4//режим работы с LCD 
 
 
 #define AR_WHEEL_D 65 //диаметр колеса в мм
+#define AR_MAX_SPEED 255 //максимальная скорость
 
-//работа с экраном по умолчанию выключена т.к. библиотека занимает много места
 
 
 
@@ -81,13 +82,10 @@
 class Robtech
 {
 public:
-	/*
-	* 	mode - режим работы: с энкодерами или без(???) может  define-ми регулировать режимы работы
-	*	ar_width - ширина модели в мм
-	*/
+	
 	Robtech();
 
-	void initAR(int mode,uint16_t ar_width);
+	void initAR(int mode);
 	void moveForward(uint8_t speed, uint16_t distance);//едем вперед
 	void moveBackward(uint8_t speed, uint16_t distance);//едем назад
 	void turnLeft(int degree);//поворот через левое колесо на определенный градус
@@ -102,6 +100,8 @@ public:
 	uint8_t getRightWheelSpeed();//берем скорость правого мотора
 
 	//публичные функции работы с энкодерами колес
+	uint16_t getCoveredDistance();//пройденное расстояние
+	void resetCoveredDistance();//сброс пройденного расстояния
 	uint16_t getLeftWheelDistance();//пройденное расстояние левого колеса
 	uint16_t getRightWheelDistance();//пройденное расстояние правого колеса
 	void resetLeftWheelDistance();//обнуление пройденного расстояния левого колеса
@@ -114,11 +114,13 @@ public:
 	void digitalWriteP(uint8_t pin, uint8_t val);
 	//инвертировать состояние порта
 	void toggleP(uint8_t pin);
+	void pinModeP(uint8_t pin, uint8_t mode);
 	//читать из порта
 	uint8_t digitalReadP(uint8_t pin);
 	
+
+
 	//функции для работы с экраном
-	
 	void LCDinit();
 	void printChar(char c, byte X=255, byte Y=255);
 	void printString(const char *String, byte X=255, byte Y=255, byte numChar=255);
