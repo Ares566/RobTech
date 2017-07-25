@@ -4,6 +4,8 @@
   Ver. 0.7
 */
 
+
+
 #ifndef Robtech_h
 #define Robtech_h
 
@@ -86,17 +88,17 @@ public:
 	Robtech();
 
 	void initAR(int mode);
-	void moveForward(uint8_t speed, uint16_t distance);//едем вперед
+	void moveForward(uint8_t speed, uint16_t distance, boolean bWithPID = false);//едем вперед
 	void moveBackward(uint8_t speed, uint16_t distance);//едем назад
 	void turnLeft(int degree);//поворот через левое колесо на определенный градус
 	void turnRight(int degree);//поворот через правое колесо на определенный градус
 	void stopMoving();//останов обоих моторов
-	void waitingDistance4LM(uint16_t distance);//ждем пока левый мотор проедет определенную дистанцию
-	void waitingDistance4RM(uint16_t distance);//ждем пока правый мотор проедет определенную дистанцию
+	void waitingDistance4LM(uint16_t distance, boolean bWithPID = false);//ждем пока левый мотор проедет определенную дистанцию
+	void waitingDistance4RM(uint16_t distance, boolean bWithPID = false);//ждем пока правый мотор проедет определенную дистанцию
 
-	void setLeftWheelSpeed(uint8_t speed);//устанавливаем скорость левого мотора
+	void setLeftWheelSpeed(int speed);//устанавливаем скорость левого мотора
 	uint8_t getLeftWheelSpeed();//берем скорость левого мотора
-	void setRightWheelSpeed(uint8_t speed);//устанавливаем скорость правого мотора
+	void setRightWheelSpeed(int speed);//устанавливаем скорость правого мотора
 	uint8_t getRightWheelSpeed();//берем скорость правого мотора
 
 	//публичные функции работы с энкодерами колес
@@ -134,7 +136,7 @@ private:
 	uint16_t _ar_width;
 	void sendCommand(byte command);
 	void sendData(byte Data);
-
+	uint16_t convertCM2Tick(uint16_t cm);
 	void setCursorXY(byte Column, byte Row);
 	
 	

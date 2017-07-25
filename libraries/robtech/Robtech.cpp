@@ -4,17 +4,16 @@
 */
 
 
+#include <Wire.h>
 #include "Robtech.h"
-#include <../Wire/Wire.h>
 #include <avr/pgmspace.h>
-
 #include <PCF8574.h>
 
 
-#define ENL 5           // ШИМ вывод для управления правым двигателем 0 - стоп, подтянуто на землю
-#define ENR 6           // ШИМ вывод для управления левым двигателем  0 - стоп, подтянуто на землю
-#define DIRL 4          // Направление вращение левого двигателя 
-#define DIRR 7          // Направление вращение правого двигателя 
+#define ENL 6           // ШИМ вывод для управления правым двигателем 0 - стоп, подтянуто на землю
+#define ENR 5           // ШИМ вывод для управления левым двигателем  0 - стоп, подтянуто на землю
+#define DIRL 7          // Направление вращение левого двигателя 
+#define DIRR 4          // Направление вращение правого двигателя 
 
 
 // This font be freely used without any restriction(It is placed in public domain)
@@ -139,7 +138,7 @@ Robtech::Robtech(){
 
 //инициализация робота
 void Robtech::initAR(int mode){
-	_ar_width = 130;
+	_ar_width = 150;
 	//инициализация дисплея
 	if (mode && AR_M_WITH_LCD){
 		LCDinit();
@@ -151,11 +150,12 @@ void Robtech::initAR(int mode){
 		//подключаем энкодеры
 		pinMode(2, INPUT);   //2 пин отвечает за 0 прерывание
 		digitalWrite(2, HIGH);       // включаем подтягивающий резистор
-		attachInterrupt(0, encoderFuncM_L, CHANGE);  // энкодер левого колеса
-
+		
 		pinMode(3, INPUT);   //3 пин отвечает за 1 прерывание
 		digitalWrite(3, HIGH);       // включаем подтягивающий резистор
-		attachInterrupt(1, encoderFuncM_R, CHANGE);  // энкодер правого колеса
+		
+		attachInterrupt(1, encoderFuncM_L, CHANGE);  // энкодер левого колеса
+		attachInterrupt(0, encoderFuncM_R, CHANGE);  // энкодер правого колеса
 	}
 }
 
@@ -166,7 +166,9 @@ void Robtech::initAR(int mode){
 */
 
 //устанавливаем скорость левого мотора
-void Robtech::setLeftWheelSpeed(uint8_t speed){
+void Robtech::setLeftWheelSpeed(int speed){
+	
+	speed = constrain(speed, 0, 255);
 	lw_speed = speed;
 	analogWrite(ENL,lw_speed);
 }
@@ -177,7 +179,9 @@ uint8_t Robtech::getLeftWheelSpeed(){
 }
 
 //устанавливаем скорость правого мотора
-void Robtech::setRightWheelSpeed(uint8_t speed){
+void Robtech::setRightWheelSpeed(int speed){
+	
+	speed = constrain(speed, 0, 255);
 	rw_speed = speed;
 	analogWrite(ENR,rw_speed);
 }
@@ -187,8 +191,8 @@ uint8_t Robtech::getRightWheelSpeed(){
 	return rw_speed;
 }
 
-//едем вперед
-void Robtech::moveForward(uint8_t speed, uint16_t distance){
+//Прямолинейное движение вперед
+void Robtech::moveForward(uint8_t speed, uint16_t distance, boolean bWithPID){
 	
 	digitalWrite(DIRL,HIGH);
 	digitalWrite(DIRR,HIGH);
@@ -199,8 +203,66 @@ void Robtech::moveForward(uint8_t speed, uint16_t distance){
 	
 
 	//обработка distance
-	if (distance){
-		waitingDistance4RM(distance);
+	if (speed && distance){
+		//waitingDistance4RM(distance);
+		uint16_t iBegLWDistance = getLeftWheelDistance();
+		uint16_t iBegRWDistance = getRightWheelDistance();
+		
+		uint16_t lastError = 0;
+		uint16_t sumError = 0;
+		
+		uint16_t KP = 2000 ; //position multiplier (gain)
+		uint16_t KI = 100; // Intergral multiplier (gain)
+		uint16_t KD = 200; // derivative multiplier (gain)
+		uint16_t needed_tick = convertCM2Tick(distance);
+		uint16_t needed_tick_lw = lw_enc_counter + needed_tick;
+		uint16_t needed_tick_rw = rw_enc_counter + needed_tick;
+		
+		while((iBegLWDistance + distance) > getLeftWheelDistance()){
+			
+			
+			delay(25);
+			
+
+			if (bWithPID){/* использовать PID для синхронизации вращения левого и правого двигателя*/
+
+				int16_t error = -1 * ((needed_tick_lw-lw_enc_counter) - (needed_tick_rw-rw_enc_counter));
+				
+				if (abs(error)<2){
+					continue;
+				}
+				int16_t P = (int16_t) ((KP * ((int16_t)error) + KD * ((int16_t)(error - lastError)) + KI * ((int16_t)sumError))/1000);
+       	    	
+
+
+			    lastError = error;    
+			    sumError += error;
+		
+			    //scale the sum for the integral term
+			    if(sumError > 100) {
+			      sumError = 100;
+			    } else if(sumError < 0){
+			      sumError = 0;
+			    }
+			    
+			    uint8_t deltaMotorSpeed = map(abs(P),0,100,0,((int8_t)(speed*0.1))); 
+			    deltaMotorSpeed = (uint8_t) (deltaMotorSpeed /2);
+			    
+			    uint8_t LWSpeed = getLeftWheelSpeed();
+				uint8_t RWSpeed = getRightWheelSpeed();
+				
+			    if ((int16_t)error < 0){//поворачиваем налево
+					setLeftWheelSpeed(LWSpeed + deltaMotorSpeed);
+					setRightWheelSpeed(RWSpeed - deltaMotorSpeed);
+			    }else{
+			     	setLeftWheelSpeed(LWSpeed - deltaMotorSpeed);
+					setRightWheelSpeed(RWSpeed + deltaMotorSpeed);
+			    }
+
+			}
+
+			
+		}
 		stopMoving();
 	}
 }
@@ -218,6 +280,8 @@ void Robtech::moveBackward(uint8_t speed, uint16_t distance){
 	//обработка distance
 	if (distance){
 		waitingDistance4RM(distance);
+		
+
 		stopMoving();
 	}
 }
@@ -225,6 +289,10 @@ void Robtech::moveBackward(uint8_t speed, uint16_t distance){
 //поворот через левое колесо на определенный градус
 void Robtech::turnLeft(int degree){
 
+	if (degree < 5){
+		return;
+	}
+	
 	//поворачиваем вперед...
 	if (degree>0){
 		digitalWrite(DIRR,HIGH);
@@ -237,40 +305,47 @@ void Robtech::turnLeft(int degree){
 	uint16_t ArcLen = abs(round(PI * _ar_width * degree / 1800));
 	
 	//если развернуться нужно на мешьше оборота колеса, делаем скорость ниже
-	if (ArcLen < 20){
-		speed = 180;
+	if (ArcLen < 10){
+		speed = 150;
 	}
-
-	analogWrite(ENL,0);//левое колесо на месте
-	analogWrite(ENR,speed);//правое крутим
+	setLeftWheelSpeed(0);
+	setRightWheelSpeed(speed);
+	// analogWrite(ENL,0);//левое колесо на месте
+	// analogWrite(ENR,speed);//правое крутим
 	
-	waitingDistance4RM(ArcLen);
+	waitingDistance4RM(ArcLen,(ArcLen > 10));
 	stopMoving();
 }
 
 //поворот через правое колесо на определенный градус
 void Robtech::turnRight(int degree){
 	
+	if (degree < 5){
+		return;
+	}
+
 	//поворачиваем вперед...
 	if (degree>0){
-		digitalWrite(DIRL,HIGH);
+		digitalWrite(DIRL,HIGH);	
 	}else
 		digitalWrite(DIRL,LOW);//...или назад
 
 	//скорость разворота
-	uint8_t speed = 200;
+	uint8_t speed = 150;
 	//длина дуги
 	uint16_t ArcLen = abs(round(PI * _ar_width * degree / 1800));
 
-	//если развернуться нужно на мешьше оборота колеса, делаем скорость ниже
-	if (ArcLen < 20){
-		speed = 180;
+	//если развернуться нужно меньше оборота колеса, делаем скорость ниже
+	if (ArcLen < 10){
+		speed = 100;
 	}
+	setLeftWheelSpeed(speed);
+	setRightWheelSpeed(0);
 
-	analogWrite(ENL,speed);
-	analogWrite(ENR,0);
+	// analogWrite(ENL,speed);
+	// analogWrite(ENR,0);
 
-	waitingDistance4LM(ArcLen);
+	waitingDistance4LM(ArcLen, (ArcLen > 10));
 	stopMoving();
 }
 
@@ -281,21 +356,94 @@ void Robtech::stopMoving(){
 }
 
 //ждем пока левый мотор проедет определенную дистанцию
-void Robtech::waitingDistance4LM(uint16_t distance){
+void Robtech::waitingDistance4LM(uint16_t distance, boolean bWithPID){
 	uint16_t iCurDistance = getLeftWheelDistance();
-	uint16_t iCalcDistance = getLeftWheelDistance();
+	
+	uint16_t lastError = 0;
+	uint16_t sumError = 0;
+	
+	uint16_t KP = 3000 ; //position multiplier (gain)
+	uint16_t KI = 300; // Intergral multiplier (gain)
+	uint16_t KD = 500; // derivative multiplier (gain)
+	uint16_t needed_tick = convertCM2Tick(distance);
+	uint16_t needed_tick_lw = lw_enc_counter + needed_tick;
+	
 
-	while((iCurDistance + distance) > iCalcDistance){
-		delay(1);
-		iCalcDistance = getLeftWheelDistance();
-	}
+	while((iCurDistance + distance) > getLeftWheelDistance()){
+			
+			
+			delay(25);
+			
+
+			if (bWithPID){/* использовать PID для синхронизации вращения левого и правого двигателя*/
+				
+				int16_t error = needed_tick_lw - lw_enc_counter;
+				 
+				if (abs(error)<2){
+					continue;
+				}
+				int16_t P = (int16_t) ((KP * ((int16_t)error) + KD * ((int16_t)(error - lastError)) + KI * ((int16_t)sumError))/1000);
+       	    	
+			    lastError = error;    
+			    sumError += error;
+		
+			    uint8_t LWSpeed = 100 * 0.2;
+			    int8_t deltaMotorSpeed = map( abs(P), 0, 100, -LWSpeed, LWSpeed ); 
+			    	    
+				setLeftWheelSpeed(100 + deltaMotorSpeed);
+
+			}
+
+			
+		}
+		
 }
 
 //ждем пока правый мотор проедет определенную дистанцию
-void Robtech::waitingDistance4RM(uint16_t distance){
+void Robtech::waitingDistance4RM(uint16_t distance, boolean bWithPID){
 	uint16_t iCurDistance = getRightWheelDistance();
-	while((iCurDistance + distance) > getRightWheelDistance()){delay(1);}
+	
+
+	uint16_t lastError = 0;
+	uint16_t sumError = 0;
+	
+	uint16_t KP = 3000 ; //position multiplier (gain)
+	uint16_t KI = 300; // Intergral multiplier (gain)
+	uint16_t KD = 500; // derivative multiplier (gain)
+	uint16_t needed_tick = convertCM2Tick(distance);
+	uint16_t needed_tick_rw = rw_enc_counter + needed_tick;
+	
+
+	while((iCurDistance + distance) > getRightWheelDistance()){
+			
+			
+			delay(25);
+			
+			
+
+			if (bWithPID){/* использовать PID для синхронизации вращения левого и правого двигателя*/
+				
+				int16_t error = needed_tick_rw - rw_enc_counter;
+				 
+				if (abs(error)<2){
+					continue;
+				}
+				int16_t P = (int16_t) ((KP * ((int16_t)error) + KD * ((int16_t)(error - lastError)) + KI * ((int16_t)sumError))/1000);
+       	    	
+			    lastError = error;    
+			    sumError += error;
+		
+			    uint8_t RWSpeed = 100 * 0.2;
+			    int8_t deltaMotorSpeed = map( abs(P), 0, 100, -RWSpeed, RWSpeed ); 
+			    	    
+				setRightWheelSpeed(100 + deltaMotorSpeed);
+
+			}
+
+			
+		}
 }
+
 /*
 *  Работа с энкодерами моторов
 *  подсчитываем пройденное расстояние
@@ -307,7 +455,7 @@ void  encoderFuncM_L() {
 	static unsigned long last_interrupt_time_l = 0;
  	unsigned long interrupt_time_l = millis();
 
-  if (digitalRead(2) == HIGH && interrupt_time_l - last_interrupt_time_l > 25) {
+  if (digitalRead(3) == HIGH && interrupt_time_l - last_interrupt_time_l > 25) {
     lw_enc_counter++;
     last_interrupt_time_l = interrupt_time_l;
   } 
@@ -319,7 +467,7 @@ void encoderFuncM_R() {
  	unsigned long interrupt_time_r = millis();
  	
 
-	if (digitalRead(3) == HIGH && interrupt_time_r - last_interrupt_time_r > 25) {
+	if (digitalRead(2) == HIGH && interrupt_time_r - last_interrupt_time_r > 25) {
 		rw_enc_counter++;
 		last_interrupt_time_r = interrupt_time_r;
 	} 
@@ -335,6 +483,12 @@ void Robtech::resetCoveredDistance(){
 	resetLeftWheelDistance();
 	resetRightWheelDistance();
 }
+
+uint16_t Robtech::convertCM2Tick(uint16_t cm){
+	return round(cm * 200 / (PI*AR_WHEEL_D));
+}
+
+
 //сколько сантиметров проехало левое колесо
 uint16_t Robtech::getLeftWheelDistance(){
 	
@@ -367,8 +521,8 @@ void Robtech::digitalWriteP(uint8_t pin, uint8_t val){
 	{
 		/* стандартный digitalWrite */
 		digitalWrite(pin,val);
-	}
-	PCF_20.write(pin-1, val);
+	}else
+		PCF_20.write(pin-1, val);
 }
 
 void Robtech::toggleP(uint8_t pin){
