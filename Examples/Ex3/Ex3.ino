@@ -1,19 +1,14 @@
-// Подключаем нужные библиотеки
-#include <PCF8574.h>
-#include "Wire.h"
-
 // Подключаем API Robtech
 #include <Robtech.h>
 
 // Объявляем переменную Robot, как экземпляр класса Robtech
 Robtech Robot;
 
-
-
 // здесь мы запускаем инициализации, эта функция вызовется только единожды при включении платформы
 void setup() {
   Robot.initAR(AR_M_WITH_ENC && AR_M_WITH_LCD);
   Robot.printString("RobTech", 5, 0); // Печатаем на LCD строку
+  Robot.printString("Ex #3: Harvester", 0, 1);
 }
 
 // Счетчик итераций
@@ -52,19 +47,19 @@ void loop() {
 }
 
 //точное перемещение вперед
-void accurateMoveForward() {
-  //параметры нужно подставить
-  //из лучшего результата предыдущего эксперимента
-  Robot.moveForward(AR_MAX_SPEED * 0.5, 7);
-  Robot.moveForward(AR_MAX_SPEED  * 0.7, 15);
-  Robot.moveForward(AR_MAX_SPEED * 0.4, 8);
-}
-
-//точное перемещение назад
 void accurateMoveBackward() {
   //параметры нужно подставить
   //из лучшего результата предыдущего эксперимента
-  Robot.moveBackward(AR_MAX_SPEED * 0.5, 7);
-  Robot.moveBackward(AR_MAX_SPEED  * 0.7, 15);
-  Robot.moveBackward(AR_MAX_SPEED * 0.4, 8);
+  Robot.moveForward(AR_MAX_SPEED * 0.7, 7);
+  Robot.moveForward(AR_MAX_SPEED * 0.8, 8);
+  Robot.moveForward(AR_MAX_SPEED * 0.6, 15);
+}
+
+//точное перемещение назад
+void accurateMoveForward() {
+  //параметры нужно подставить
+  //из лучшего результата предыдущего эксперимента
+  Robot.moveBackward(AR_MAX_SPEED * 0.7, 7);
+  Robot.moveBackward(AR_MAX_SPEED * 0.8, 8);
+  Robot.moveBackward(AR_MAX_SPEED * 0.6, 15);
 }
